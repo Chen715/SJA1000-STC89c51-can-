@@ -1,0 +1,274 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 15:20:31 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          /*************************************************
+   2          *功能描述: CEPARK CAN开发板-CAN两个节点测试
+   3          *说明：将两块CAN总线开发板CANH---CANH,CANL---CANL相连
+   4          *      连接无误后分别按动中断按键。相应的数码管显示加一。
+   5          *      并通过CAN总线发送到另一块数码管上显示。
+   6          *版本：v2.00
+   7          
+   8          温度传感器的接口 P17
+   9          
+  10          红外线传感器接口 P32
+  11          
+  12          ****************************************************/ 
+  13          #include <reg52.h>
+  14          #include "sjapelican.h"
+  15          #include "config.h"
+  16          #include"delay.h"
+  17          #include "18b20.h"
+  18          
+  19          
+  20          
+  21          bit ReadTempFlag;//定义读时间标志
+  22          
+  23          
+  24          void INT0_Data(void) interrupt 0
+  25          {//INT0按键为计数按键
+  26   1          EA = 0;
+  27   1          Txd_data++; //存储计数结果，并为待发送的数据
+  28   1        Peli_TXD();
+  29   1          EA = 1;
+  30   1      }
+  31          
+  32          void Peli_RXD(void) interrupt 2
+  33          {//接收数据函数，在中断服务程序中调用
+  34   1      
+  35   1          uint8 data Status;
+  36   1          EA = 0;//关CPU中断
+  37   1      
+  38   1          Status = SJA_IR;
+  39   1          if(Status & RI_BIT)
+  40   1          {//IR.0 = 1 接收中断
+  41   2              RX_buffer[0] =  SJA_RBSR0;
+  42   2              RX_buffer[1] =  SJA_RBSR1;
+  43   2              RX_buffer[2] =  SJA_RBSR2;
+  44   2              RX_buffer[3] =  SJA_RBSR3;
+  45   2              RX_buffer[4] =  SJA_RBSR4;
+  46   2              RX_buffer[5] =  SJA_RBSR5;
+  47   2              RX_buffer[6] =  SJA_RBSR6;
+  48   2              RX_buffer[7] =  SJA_RBSR7;
+  49   2              RX_buffer[8] =  SJA_RBSR8;
+  50   2              RX_buffer[9] =  SJA_RBSR9;
+  51   2              RX_buffer[10] =  SJA_RBSR10;
+  52   2              RX_buffer[11] =  SJA_RBSR11;
+  53   2              RX_buffer[12] =  SJA_RBSR12;
+  54   2      
+  55   2              SJA_CMR = RRB_BIT;
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 15:20:31 PAGE 2   
+
+  56   2              Status = SJA_ALC;//释放仲裁随时捕捉寄存器
+  57   2              Status = SJA_ECC;//释放错误代码捕捉寄存器
+  58   2          }
+  59   1          SJA_IER = RIE_BIT;// .0=1--接收中断使能；
+  60   1      
+  61   1        Rxd_data = RX_buffer[5];
+  62   1          EA = 1;//打开CPU中断
+  63   1      }
+  64          
+  65          
+  66          /*------------------------------------------------
+  67                              定时器初始化子程序
+  68          ------------------------------------------------*/
+  69          void Init_Timer0(void)
+  70          {
+  71   1       TMOD |= 0x01;    //使用模式1，16位定时器，使用"|"符号可以在使用多个定时器时不受影响         
+  72   1       //TH0=0x00;        //给定初值
+  73   1       //TL0=0x00;
+  74   1       //EA=1;            //总中断打开
+  75   1       ET0=1;           //定时器中断打开
+  76   1       TR0=1;           //定时器开关打开
+  77   1      }
+  78          /*------------------------------------------------
+  79                           定时器中断子程序
+  80          ------------------------------------------------*/
+  81          void Timer0_isr(void) interrupt 1 
+  82          {
+  83   1       static unsigned int num;
+  84   1       TH0=(65536-2000)/256;      //重新赋值 2ms
+  85   1       TL0=(65536-2000)%256;
+  86   1       
+  87   1       num++;
+  88   1       if(num==300)        //
+  89   1         {
+  90   2          num=0;
+  91   2          ReadTempFlag=1; //读标志位置1
+  92   2        }
+  93   1      }
+  94          
+  95          
+  96          
+  97          
+  98          void MCU_Init(void)
+  99          {
+ 100   1        //CPU初始化
+ 101   1        SJA_RST = 0;//SJA1000复位有效
+ 102   1        mDelay(10); //延时
+ 103   1          SJA_RST = 1;//CAN总线复位管脚,复位无效
+ 104   1          SJA_CS = 0;//CAN总线片选有效
+ 105   1          EX1 = 1;//外部中断1使能；CAN总线接收中断
+ 106   1          IT1 = 0;//CAN总线接收中断，低电平触发
+ 107   1          IT0 = 1;//外部中断0负边沿触发
+ 108   1          EX0 = 1;//打开外部中断0
+ 109   1          EA = 1; //打开总中断
+ 110   1      }
+ 111          
+ 112          void main(void)
+ 113          {
+ 114   1      int temp;
+ 115   1      float temp3;
+ 116   1      int temp1=1234;
+ 117   1        
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 15:20:31 PAGE 3   
+
+ 118   1          MCU_Init();
+ 119   1          Init_Timer0();
+ 120   1          Peli_Init();
+ 121   1          mDelay(500);
+ 122   1          while(1)
+ 123   1          {  
+ 124   2            if(ReadTempFlag==1)
+ 125   2             {
+ 126   3              ReadTempFlag=0;
+ 127   3              temp=ReadTemperature();
+ 128   3              temp =temp*6.25;//乘100倍
+ 129   3              Txd_data = temp/100; rxddata1 =temp%100; 
+ 130   3               
+ 131   3               
+ 132   3              } 
+ 133   2             Peli_TXD();//发送数据
+ 134   2            mDelay(200);
+ 135   2          }
+ 136   1            
+ 137   1      
+ 138   1        
+ 139   1      
+ 140   1      }
+*** WARNING C280 IN LINE 115 OF main.c: 'temp3': unreferenced local variable
+ 141          //SJA1000 的初始化
+ 142          void Peli_Init(void)
+ 143          {
+ 144   1          uint8 bdata Status;
+ 145   1          do
+ 146   1          {//  .0=1---reset MODRe,进入复位模式，以便设置相应的寄存器
+ 147   2           //防止未进入复位模式，重复写入
+ 148   2              SJA_MOD = RM_BIT |AFM_BIT;
+ 149   2        Status = SJA_MOD ;
+ 150   2          }
+ 151   1          while(!(Status & RM_BIT));
+ 152   1      
+ 153   1          SJA_CDR = CANMode_BIT|CLKOff_BIT;// CDR.3=1--时钟关闭, .7=0---basic CAN, .7=1---Peli CAN
+ 154   1          SJA_BTR0 = 0x03;
+ 155   1          SJA_BTR1 = 0x1c;//16M晶振，波特率125Kbps
+ 156   1          SJA_IER = RIE_BIT;// .0=1--接收中断使能；  .1=0--关闭发送中断使能
+ 157   1          SJA_OCR = NormalMode|Tx0PullDn|OCPOL1_BIT|Tx1PullUp;// 配置输出控制寄存器
+ 158   1          SJA_CMR = RRB_BIT;//释放接收缓冲器
+ 159   1      
+ 160   1          SJA_ACR0 = 0x11;
+ 161   1          SJA_ACR1 = 0x22;
+ 162   1          SJA_ACR2 = 0x33;
+ 163   1          SJA_ACR3 = 0x44;//初始化标示码
+ 164   1      
+ 165   1          SJA_AMR0 = 0xff;
+ 166   1          SJA_AMR1 = 0xff;
+ 167   1          SJA_AMR2 = 0xff;
+ 168   1          SJA_AMR3 = 0xff;//初始化掩码
+ 169   1      
+ 170   1          do
+ 171   1          {
+ 172   2        SJA_MOD = AFM_BIT;
+ 173   2        Status  = SJA_MOD;
+ 174   2           }
+ 175   1          while( Status & RM_BIT );
+ 176   1      
+ 177   1      }//SJA1000 的初始化
+ 178          
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 15:20:31 PAGE 4   
+
+ 179          
+ 180          void Peli_TXD( void )
+ 181          {
+ 182   1          uint8 data Status;
+ 183   1      //初始化标示码头信息
+ 184   1          TX_buffer[0] = 0x88;//.7=0扩展帧；.6=0数据帧; .3=1数据长度
+ 185   1          TX_buffer[1] = 0x01;//本节点地址
+ 186   1          TX_buffer[2] = 0x02;
+ 187   1          TX_buffer[3] = 0x03;
+ 188   1          TX_buffer[4] = 0x04;
+ 189   1      
+ 190   1      //初始化发送数据单元
+ 191   1          TX_buffer[5]  = Txd_data;
+ 192   1          TX_buffer[6]  = rxddata1;
+ 193   1          TX_buffer[7]  = 0x33;
+ 194   1          TX_buffer[8]  = 0x44;
+ 195   1          TX_buffer[9]  = 0x55;
+ 196   1          TX_buffer[10] = 0x66;
+ 197   1          TX_buffer[11] = 0x77;
+ 198   1          TX_buffer[12] = 0x88;
+ 199   1      
+ 200   1          do
+ 201   1          {
+ 202   2              Status = SJA_SR;
+ 203   2          }
+ 204   1          while( Status & RS_BIT);  //SR.4=1 正在接收，等待
+ 205   1          
+ 206   1          do
+ 207   1          {
+ 208   2              Status = SJA_SR;
+ 209   2          }
+ 210   1          while(!(Status & TCS_BIT)); //SR.3=0,发送请求未处理完，等待
+ 211   1      
+ 212   1          do
+ 213   1          {
+ 214   2              Status = SJA_SR;
+ 215   2          }
+ 216   1          while(!(Status & TBS_BIT)); //SR.2=0,发送缓冲器被锁。等待
+ 217   1      
+ 218   1          SJA_TBSR0  = TX_buffer[0];
+ 219   1          SJA_TBSR1  = TX_buffer[1];
+ 220   1          SJA_TBSR2  = TX_buffer[2];
+ 221   1          SJA_TBSR3  = TX_buffer[3];
+ 222   1          SJA_TBSR4  = TX_buffer[4];
+ 223   1          SJA_TBSR5  = TX_buffer[5];
+ 224   1          SJA_TBSR6  = TX_buffer[6];
+ 225   1          SJA_TBSR7  = TX_buffer[7];
+ 226   1          SJA_TBSR8  = TX_buffer[8];
+ 227   1          SJA_TBSR9  = TX_buffer[9];
+ 228   1          SJA_TBSR10 = TX_buffer[10];
+ 229   1          SJA_TBSR11 = TX_buffer[11];
+ 230   1          SJA_TBSR12 = TX_buffer[12];
+ 231   1      
+ 232   1          SJA_CMR = TR_BIT;//置位发送接收请求
+ 233   1      }
+ 234          
+ 235          void mDelay(uint16 mtime)
+ 236          {
+ 237   1        for(; mtime > 0; mtime--)
+ 238   1        {
+ 239   2          uint8 j = 244;
+ 240   2          while(--j);
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 15:20:31 PAGE 5   
+
+ 241   2        }
+ 242   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    573    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     32       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

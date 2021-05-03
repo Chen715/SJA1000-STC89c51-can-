@@ -1,0 +1,359 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 17:21:37 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          /*************************************************
+   2          *功能描述: CEPARK CAN开发板-CAN两个节点测试
+   3          *说明：将两块CAN总线开发板CANH---CANH,CANL---CANL相连
+   4          *      连接无误后分别按动中断按键。相应的数码管显示加一。
+   5          *      并通过CAN总线发送到另一块数码管上显示。
+   6          *版本：v2.00
+   7          *声明：程序来自网络，欢迎网友交流改进
+   8          *      活跃论坛，共同进步
+   9          *作者：协成电子 、hnrain 
+  10          *时间：2010/09/14
+  11          *邮箱：hnrain1004@gmail.com ，HQL19982003@163.com  ，qq：87675298
+  12          *网站：bbs.cepark.com ；写程序如果有问题，可以在这里讨论
+  13          *我们的口号：让不懂can的学习者，也能轻松玩转can
+  14          
+  15          *推荐教材：
+  16          饶运涛,邹继军《现场总线 CAN 原理与应用技术》.北京：北京航空航天大学出版社 （这本书，看着不错）
+  17          周立功《增强型80c51单片机速成与实战》还有周立功写的一些can通信程序算法很不错，值得学习
+  18          本程序，融入了那么一点点点点点，他们的编程思想，哈哈....仅供学习用
+  19          ****************************************************/ 
+  20          #include <reg52.h>
+  21          #include "sjapelican.h"
+  22          #include "config.h"
+  23          #include <intrins.h>
+  24          
+  25          
+  26          #define uchar unsigned char
+  27          
+  28          uchar distemp = 0;
+  29          
+  30          sbit IRIN = P1^7;         //红外接收器数据线
+  31          
+  32          uchar IRCOM[7];
+  33          
+  34          
+  35          /**********************************************************/
+  36          void delay(unsigned char x)    //x*0.14MS
+  37          {
+  38   1       unsigned char i;
+  39   1        while(x--)
+  40   1       {
+  41   2        for (i = 0; i<13; i++) {}
+  42   2       }
+  43   1      }
+  44          
+  45          
+  46          
+  47          
+  48          void IR_IN() interrupt 0 
+  49          {//INT0按键为计数按键
+  50   1      
+  51   1       unsigned char j,k,N=0;
+  52   1           EX1 = 0;   
+  53   1          delay(15);
+  54   1         if (IRIN==1) 
+  55   1           { EX1 =1;
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 17:21:37 PAGE 2   
+
+  56   2           return;
+  57   2          } 
+  58   1                                 //确认IR信号出现
+  59   1        while (!IRIN)            //等IR变为高电平，跳过9ms的前导低电平信号。
+  60   1          {delay(1);}
+  61   1          
+  62   1       for (j=0;j<4;j++)         //收集四组数据
+  63   1       { 
+  64   2        for (k=0;k<8;k++)        //每组数据有8位
+  65   2        {
+  66   3         while (IRIN)            //等 IR 变为低电平，跳过4.5ms的前导高电平信号。
+  67   3           {delay(1);}
+  68   3          while (!IRIN)          //等 IR 变为高电平
+  69   3           {delay(1);}
+  70   3               
+  71   3           while (IRIN)           //计算IR高电平时长
+  72   3            {
+  73   4          delay(1);
+  74   4          N++;           
+  75   4          if (N>=30)
+  76   4         { EX1=1;
+  77   5         return;}                  //0.14ms计数过长自动离开。
+  78   4            }                        //高电平计数完毕                
+  79   3           IRCOM[j]=IRCOM[j] >> 1;                  //数据最高位补“0”
+  80   3           if (N>=8) {IRCOM[j] = IRCOM[j] | 0x80;}  //数据最高位补“1”
+  81   3           N=0;
+  82   3        }//end for k
+  83   2       }//end for j
+  84   1         
+  85   1         if (IRCOM[2]!=~IRCOM[3])
+  86   1         { EX1=1;
+  87   2           goto LOOP; }
+  88   1      
+  89   1         switch(IRCOM[2])
+  90   1         {
+  91   2            case 0x19:
+  92   2            distemp = 0;
+  93   2            break;
+  94   2          case 0x45:
+  95   2            distemp = 1;
+  96   2            break;
+  97   2          case 0x46:
+  98   2            distemp = 2;
+  99   2            break;
+ 100   2          case 0x47:
+ 101   2            distemp = 3;
+ 102   2            break;
+ 103   2          case 0x44:
+ 104   2            distemp = 4;
+ 105   2            break;
+ 106   2          case 0x40:
+ 107   2            distemp = 5;
+ 108   2            break;
+ 109   2          case 0x43:
+ 110   2            distemp = 6;
+ 111   2            break;
+ 112   2          case 0x07:
+ 113   2            distemp = 7;
+ 114   2            break;
+ 115   2          case 0x15:
+ 116   2            distemp = 8;
+ 117   2            break;
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 17:21:37 PAGE 3   
+
+ 118   2          case 0x09:
+ 119   2            distemp = 9;
+ 120   2            break;
+ 121   2         }
+ 122   1         Txd_data = distemp;
+ 123   1          EX1 = 1;
+ 124   1        LOOP:; 
+ 125   1      }
+ 126          
+ 127          void Peli_RXD(void) interrupt 2
+ 128          {//接收数据函数，在中断服务程序中调用
+ 129   1      
+ 130   1          uint8 data Status;
+ 131   1          EA = 0;//关CPU中断
+ 132   1      
+ 133   1          Status = SJA_IR;
+ 134   1          if(Status & RI_BIT)
+ 135   1          {//IR.0 = 1 接收中断
+ 136   2              RX_buffer[0] =  SJA_RBSR0;
+ 137   2              RX_buffer[1] =  SJA_RBSR1;
+ 138   2              RX_buffer[2] =  SJA_RBSR2;
+ 139   2              RX_buffer[3] =  SJA_RBSR3;
+ 140   2              RX_buffer[4] =  SJA_RBSR4;
+ 141   2              RX_buffer[5] =  SJA_RBSR5;
+ 142   2              RX_buffer[6] =  SJA_RBSR6;
+ 143   2              RX_buffer[7] =  SJA_RBSR7;
+ 144   2              RX_buffer[8] =  SJA_RBSR8;
+ 145   2              RX_buffer[9] =  SJA_RBSR9;
+ 146   2              RX_buffer[10] =  SJA_RBSR10;
+ 147   2              RX_buffer[11] =  SJA_RBSR11;
+ 148   2              RX_buffer[12] =  SJA_RBSR12;
+ 149   2      
+ 150   2              SJA_CMR = RRB_BIT;
+ 151   2              Status = SJA_ALC;//释放仲裁随时捕捉寄存器
+ 152   2              Status = SJA_ECC;//释放错误代码捕捉寄存器
+ 153   2          }
+ 154   1          SJA_IER = RIE_BIT;// .0=1--接收中断使能；
+ 155   1      
+ 156   1        Rxd_data = RX_buffer[5];
+ 157   1          EA = 1;//打开CPU中断
+ 158   1      }
+ 159          
+ 160          void MCU_Init(void)
+ 161          {
+ 162   1        //CPU初始化
+ 163   1        SJA_RST = 0;//SJA1000复位有效
+ 164   1        mDelay(10); //延时
+ 165   1          SJA_RST = 1;//CAN总线复位管脚,复位无效
+ 166   1          SJA_CS = 0;//CAN总线片选有效
+ 167   1      
+ 168   1      
+ 169   1        
+ 170   1          EX1 = 1;//外部中断1使能；CAN总线接收中断
+ 171   1          IT1 = 0;//CAN总线接收中断，低电平触发
+ 172   1        
+ 173   1        //IE =1;
+ 174   1          IT0 = 1;//外部中断0负边沿触发
+ 175   1          EX0 = 1;//打开外部中断0
+ 176   1          EA = 1; //打开总中断
+ 177   1      
+ 178   1      }
+ 179          
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 17:21:37 PAGE 4   
+
+ 180          void main(void)
+ 181          {
+ 182   1        MCU_Init();
+ 183   1          Peli_Init();
+ 184   1      //  mDelay(1);
+ 185   1          while(1)
+ 186   1          {  
+ 187   2        //  Txd_data =1;
+ 188   2          Peli_TXD();
+ 189   2            mDelay(2000);
+ 190   2      
+ 191   2        }
+ 192   1      
+ 193   1      }
+ 194          //SJA1000 的初始化
+ 195          void Peli_Init(void)
+ 196          {
+ 197   1          uint8 bdata Status;
+ 198   1          do
+ 199   1          {//  .0=1---reset MODRe,进入复位模式，以便设置相应的寄存器
+ 200   2           //防止未进入复位模式，重复写入
+ 201   2              SJA_MOD = RM_BIT |AFM_BIT;
+ 202   2        Status = SJA_MOD ;
+ 203   2          }
+ 204   1          while(!(Status & RM_BIT));
+ 205   1      
+ 206   1          SJA_CDR = CANMode_BIT|CLKOff_BIT;// CDR.3=1--时钟关闭, .7=0---basic CAN, .7=1---Peli CAN
+ 207   1          SJA_BTR0 = 0x03;
+ 208   1          SJA_BTR1 = 0x1c;//16M晶振，波特率125Kbps
+ 209   1          SJA_IER = RIE_BIT;// .0=1--接收中断使能；  .1=0--关闭发送中断使能
+ 210   1          SJA_OCR = NormalMode|Tx0PullDn|OCPOL1_BIT|Tx1PullUp;// 配置输出控制寄存器
+ 211   1          SJA_CMR = RRB_BIT;//释放接收缓冲器
+ 212   1      
+ 213   1          SJA_ACR0 = 0x11;
+ 214   1          SJA_ACR1 = 0x22;
+ 215   1          SJA_ACR2 = 0x33;
+ 216   1          SJA_ACR3 = 0x44;//初始化标示码
+ 217   1      
+ 218   1          SJA_AMR0 = 0xff;
+ 219   1          SJA_AMR1 = 0xff;
+ 220   1          SJA_AMR2 = 0xff;
+ 221   1          SJA_AMR3 = 0xff;//初始化掩码
+ 222   1      
+ 223   1          do
+ 224   1          {
+ 225   2        SJA_MOD = AFM_BIT;
+ 226   2        Status  = SJA_MOD;
+ 227   2           }
+ 228   1          while( Status & RM_BIT );
+ 229   1      
+ 230   1      }//SJA1000 的初始化
+ 231          
+ 232          
+ 233          void Peli_TXD( void )
+ 234          {
+ 235   1          uint8 data Status;
+ 236   1      //初始化标示码头信息
+ 237   1          TX_buffer[0] = 0x88;//.7=0扩展帧；.6=0数据帧; .3=1数据长度
+ 238   1          TX_buffer[1] = 0x01;//本节点地址
+ 239   1          TX_buffer[2] = 0x02;
+ 240   1          TX_buffer[3] = 0x03;
+ 241   1          TX_buffer[4] = 0x04;
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 17:21:37 PAGE 5   
+
+ 242   1      
+ 243   1      //初始化发送数据单元
+ 244   1          TX_buffer[5]  = Txd_data;
+ 245   1          TX_buffer[6]  = 0xFF;
+ 246   1          TX_buffer[7]  = 0x33;
+ 247   1          TX_buffer[8]  = 0x44;
+ 248   1          TX_buffer[9]  = 0x55;
+ 249   1          TX_buffer[10] = 0x66;
+ 250   1          TX_buffer[11] = 0x77;
+ 251   1          TX_buffer[12] = 0x88;
+ 252   1      
+ 253   1          do
+ 254   1          {
+ 255   2              Status = SJA_SR;
+ 256   2          }
+ 257   1          while( Status & RS_BIT);  //SR.4=1 正在接收，等待
+ 258   1          
+ 259   1          do
+ 260   1          {
+ 261   2              Status = SJA_SR;
+ 262   2          }
+ 263   1          while(!(Status & TCS_BIT)); //SR.3=0,发送请求未处理完，等待
+ 264   1      
+ 265   1          do
+ 266   1          {
+ 267   2              Status = SJA_SR;
+ 268   2          }
+ 269   1          while(!(Status & TBS_BIT)); //SR.2=0,发送缓冲器被锁。等待
+ 270   1      
+ 271   1          SJA_TBSR0  = TX_buffer[0];
+ 272   1          SJA_TBSR1  = TX_buffer[1];
+ 273   1          SJA_TBSR2  = TX_buffer[2];
+ 274   1          SJA_TBSR3  = TX_buffer[3];
+ 275   1          SJA_TBSR4  = TX_buffer[4];
+ 276   1          SJA_TBSR5  = TX_buffer[5];
+ 277   1          SJA_TBSR6  = TX_buffer[6];
+ 278   1          SJA_TBSR7  = TX_buffer[7];
+ 279   1          SJA_TBSR8  = TX_buffer[8];
+ 280   1          SJA_TBSR9  = TX_buffer[9];
+ 281   1          SJA_TBSR10 = TX_buffer[10];
+ 282   1          SJA_TBSR11 = TX_buffer[11];
+ 283   1          SJA_TBSR12 = TX_buffer[12];
+ 284   1      
+ 285   1          SJA_CMR = TR_BIT;//置位发送接收请求
+ 286   1      }
+ 287          
+ 288          void mDelay(uint16 mtime)
+ 289          {
+ 290   1        for(; mtime > 0; mtime--)
+ 291   1        {
+ 292   2          uint8 j = 244;
+ 293   2          while(--j);
+ 294   2        }
+ 295   1      }
+ 296          
+ 297          void LED_Disp_Seg7()
+ 298          {
+ 299   1         LedCtrl = LedCtrl | 0xf0;
+ 300   1      
+ 301   1         DisBuff[0] = Rxd_data%10;     //取个位数
+ 302   1         DisBuff[1] = Rxd_data%100/10; //取十位数
+ 303   1         DisBuff[2] = Rxd_data%10;     //百位数
+C51 COMPILER V9.60.0.0   MAIN                                                              05/01/2021 17:21:37 PAGE 6   
+
+ 304   1         DisBuff[3] = Rxd_data%100/10; //千位数
+ 305   1        
+ 306   1         LedPort = LED_Disp[DisBuff[0]];
+ 307   1         LedCtrl = LedCtrl & 0xbf;
+ 308   1         mDelay(5);
+ 309   1         LedCtrl = LedCtrl | 0xf0;
+ 310   1      
+ 311   1         LedPort = LED_Disp[DisBuff[1]];
+ 312   1         LedCtrl = LedCtrl & 0x7f;
+ 313   1         mDelay(5);
+ 314   1         LedCtrl = LedCtrl | 0xf0;
+ 315   1      
+ 316   1         LedPort = LED_Disp[DisBuff[2]];
+ 317   1         LedCtrl = LedCtrl & 0xef;
+ 318   1         mDelay(5);
+ 319   1         LedCtrl = LedCtrl | 0xf0;
+ 320   1      
+ 321   1         LedPort = LED_Disp[DisBuff[3]];
+ 322   1         LedCtrl = LedCtrl & 0xdf;
+ 323   1         mDelay(5);
+ 324   1         LedCtrl = LedCtrl | 0xf0;
+ 325   1      }
+ 326          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    786    ----
+   CONSTANT SIZE    =     16    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     41       3
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
